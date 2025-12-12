@@ -17,6 +17,7 @@ import { v4 as uuidv4 } from "uuid";
 import { ChatProvider } from "../providers/chat-provider";
 import { ChatInterface } from "./chat-interface";
 import { ChatSidebar } from "./chat-sidebar";
+import { SettingsDialog } from "./settings-dialog";
 
 interface AuthenticatedAppProps {
   user: User;
@@ -33,6 +34,7 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [channelToDelete, setChannelToDelete] = useState<Channel | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { client, setActiveChannel } = useChatContext();
   const navigate = useNavigate();
   const { channelId } = useParams<{ channelId: string }>();
@@ -160,6 +162,7 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
         onLogout={onLogout}
         onNewChat={handleNewChatClick}
         onChannelDelete={handleDeleteClick}
+        onSettingsClick={() => setSettingsOpen(true)}
       />
       <div className="flex-1 flex flex-col min-w-0">
         <ChatInterface
@@ -168,6 +171,9 @@ const AuthenticatedCore = ({ user, onLogout }: AuthenticatedAppProps) => {
           backendUrl={backendUrl}
         />
       </div>
+
+      {/* Settings Dialog */}
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 
       {/* Delete Chat Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

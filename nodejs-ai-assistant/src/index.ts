@@ -67,7 +67,7 @@ app.post("/start-ai-agent", async (req, res) => {
 
       const agent = await createAgent(
         user_id,
-        AgentPlatform.OPENAI,
+        AgentPlatform.GEMINI,
         channel_type,
         channel_id
       );
@@ -156,7 +156,8 @@ app.post("/token", async (req, res) => {
     }
 
     // Create token with expiration (1 hour) and issued at time for security
-    const issuedAt = Math.floor(Date.now() / 1000);
+    // Subtract 60 seconds from issued at time to account for clock differences
+    const issuedAt = Math.floor(Date.now() / 1000) - 60;
     const expiration = issuedAt + 60 * 60; // 1 hour from now
 
     const token = serverClient.createToken(userId, expiration, issuedAt);

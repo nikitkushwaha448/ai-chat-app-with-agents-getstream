@@ -14,6 +14,7 @@ import {
   MessageSquare,
   Moon,
   PlusCircle,
+  Settings,
   Sun,
   Trash2,
   X,
@@ -29,6 +30,7 @@ interface ChatSidebarProps {
   onLogout: () => void;
   onNewChat: () => void;
   onChannelDelete: (channel: Channel) => void;
+  onSettingsClick: () => void;
 }
 
 const ChannelListEmptyStateIndicator = () => (
@@ -59,6 +61,7 @@ export const ChatSidebar = ({
   onLogout,
   onNewChat,
   onChannelDelete,
+  onSettingsClick,
 }: ChatSidebarProps) => {
   const { client, setActiveChannel } = useChatContext();
   const { user } = client;
@@ -177,6 +180,10 @@ export const ChatSidebar = ({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-72" align="end">
+              <DropdownMenuItem onClick={onSettingsClick}>
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Settings</span>
+              </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
               >

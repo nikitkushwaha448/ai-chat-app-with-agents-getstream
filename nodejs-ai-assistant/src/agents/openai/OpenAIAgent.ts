@@ -36,37 +36,49 @@ export class OpenAIAgent implements AIAgent {
       throw new Error("OpenAI API key is required");
     }
 
-    this.openai = new OpenAI({ apiKey });
-    this.assistant = await this.openai.beta.assistants.create({
-      name: "AI Writing Assistant",
-      instructions: this.getWritingAssistantPrompt(),
-      model: "gpt-4o",
-      tools: [
-        { type: "code_interpreter" },
-        {
-          type: "function",
-          function: {
-            name: "web_search",
-            description:
-              "Search the web for current information, news, facts, or research on any topic",
-            parameters: {
-              type: "object",
-              properties: {
-                query: {
-                  type: "string",
-                  description: "The search query to find information about",
+    try {
+      this.openai = new OpenAI({ apiKey });
+      this.assistant = await this.openai.beta.assistants.create({
+        name: "AI Writing Assistant",
+        instructions: this.getWritingAssistantPrompt(),
+        model: "gpt-4o",
+        tools: [
+          { type: "code_interpreter" },
+          {
+            type: "function",
+            function: {
+              name: "web_search",
+              description:
+                "Search the web for current information, news, facts, or research on any topic",
+              parameters: {
+                type: "object",
+                properties: {
+                  query: {
+                    type: "string",
+                    description: "The search query to find information about",
+                  },
                 },
+                required: ["query"],
               },
-              required: ["query"],
             },
           },
-        },
-      ],
-      temperature: 0.7,
-    });
-    this.openAiThread = await this.openai.beta.threads.create();
+        ],
+        temperature: 0.7,
+      });
+      this.openAiThread = await this.openai.beta.threads.create();
 
-    this.chatClient.on("message.new", this.handleMessage);
+      this.chatClient.on("message.new", this.handleMessage);
+    } catch (error: any) {
+      console.error("Failed to initialize OpenAI agent:", error);
+      
+      if (error?.status === 429 || error?.code === 'insufficient_quota') {
+        throw new Error("OpenAI API quota exceeded. Please check your billing at https://platform.openai.com/account/billing");
+      } else if (error?.status === 401) {
+        throw new Error("Invalid OpenAI API key. Please verify your API key configuration.");
+      }
+      
+      throw error;
+    }
   };
 
   private getWritingAssistantPrompt = (context?: string): string => {
@@ -118,41 +130,69 @@ Your goal is to provide accurate, current, and helpful written content. Failure 
     const context = writingTask ? `Writing Task: ${writingTask}` : undefined;
     const instructions = this.getWritingAssistantPrompt(context);
 
-    await this.openai.beta.threads.messages.create(this.openAiThread.id, {
-      role: "user",
-      content: message,
-    });
+    try {
+      await this.openai.beta.threads.messages.create(this.openAiThread.id, {
+        role: "user",
+        content: message,
+      });
 
-    const { message: channelMessage } = await this.channel.sendMessage({
-      text: "",
-      ai_generated: true,
-    });
+      const { message: channelMessage } = await this.channel.sendMessage({
+        text: "",
+        ai_generated: true,
+      });
 
-    await this.channel.sendEvent({
-      type: "ai_indicator.update",
-      ai_state: "AI_STATE_THINKING",
-      cid: channelMessage.cid,
-      message_id: channelMessage.id,
-    });
+      await this.channel.sendEvent({
+        type: "ai_indicator.update",
+        ai_state: "AI_STATE_THINKING",
+        cid: channelMessage.cid,
+        message_id: channelMessage.id,
+      });
 
-    const run = this.openai.beta.threads.runs.createAndStream(
-      this.openAiThread.id,
-      {
-        assistant_id: this.assistant.id,
+      const run = this.openai.beta.threads.runs.createAndStream(
+        this.openAiThread.id,
+        {
+          assistant_id: this.assistant.id,
+        }
+      );
+
+      const handler = new OpenAIResponseHandler(
+        this.openai,
+        this.openAiThread,
+        run,
+        this.chatClient,
+        this.channel,
+        channelMessage,
+        () => this.removeHandler(handler)
+      );
+      this.handlers.push(handler);
+      void handler.run();
+    } catch (error: any) {
+      console.error("Error processing message:", error);
+      
+      // Handle OpenAI API errors
+      let errorMessage = "I apologize, but I encountered an error while processing your request.";
+      
+      if (error?.status === 429 || error?.code === 'insufficient_quota') {
+        errorMessage = "⚠️ **OpenAI API Quota Exceeded**\n\n" +
+          "The OpenAI API key has exceeded its usage quota. Please:\n" +
+          "1. Check your OpenAI account billing at https://platform.openai.com/account/billing\n" +
+          "2. Verify your API key has sufficient credits\n" +
+          "3. Consider upgrading your OpenAI plan if needed\n\n" +
+          "For more information, visit: https://platform.openai.com/docs/guides/error-codes/api-errors";
+      } else if (error?.status === 401) {
+        errorMessage = "⚠️ **Authentication Error**\n\n" +
+          "The OpenAI API key appears to be invalid or expired. Please check your API key configuration.";
+      } else if (error?.status === 500 || error?.status === 503) {
+        errorMessage = "⚠️ **Service Unavailable**\n\n" +
+          "The OpenAI service is temporarily unavailable. Please try again in a few moments.";
       }
-    );
 
-    const handler = new OpenAIResponseHandler(
-      this.openai,
-      this.openAiThread,
-      run,
-      this.chatClient,
-      this.channel,
-      channelMessage,
-      () => this.removeHandler(handler)
-    );
-    this.handlers.push(handler);
-    void handler.run();
+      // Send error message to user
+      await this.channel.sendMessage({
+        text: errorMessage,
+        ai_generated: true,
+      });
+    }
   };
 
   private removeHandler = (handlerToRemove: OpenAIResponseHandler) => {

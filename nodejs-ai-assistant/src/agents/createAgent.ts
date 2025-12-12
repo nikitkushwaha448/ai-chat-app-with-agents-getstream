@@ -1,5 +1,6 @@
 import { StreamChat } from "stream-chat";
 import { apiKey, serverClient } from "../serverClient";
+import { GeminiAgent } from "./gemini/GeminiAgent";
 import { OpenAIAgent } from "./openai/OpenAIAgent";
 import { AgentPlatform, AIAgent } from "./types";
 
@@ -20,6 +21,8 @@ export const createAgent = async (
   await channel.watch();
 
   switch (platform) {
+    case AgentPlatform.GEMINI:
+      return new GeminiAgent(chatClient, channel);
     case AgentPlatform.WRITING_ASSISTANT:
     case AgentPlatform.OPENAI:
       return new OpenAIAgent(chatClient, channel);
